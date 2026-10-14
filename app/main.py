@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 # . means current directory
-from . import models
-from .database import engine
 from .routers import posts, users, auth, votes
 from fastapi.middleware.cors import CORSMiddleware
 

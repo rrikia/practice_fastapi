@@ -51,7 +51,7 @@ class Post(PostBase):
 class PostOut(BaseModel):
     Post: Post
     votes: int
-
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Token(BaseModel):
