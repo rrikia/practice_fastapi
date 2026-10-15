@@ -103,3 +103,6 @@ Once the application is running, visit:
 
 - Deploy the application to Render
 - Set up CI/CD with GitHub Actions
+
+## Reference:
+- Tutorial: https://youtu.be/0sOvCWFmrtA?si=Z2_hdypJ5Y5bu2-w
