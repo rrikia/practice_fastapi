@@ -1,13 +1,11 @@
 import time
-
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from .config import settings
+from typing import Generator
 
 load_dotenv(".env")
 
@@ -28,15 +26,15 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
 # To talk to the database, use a session
 SessionLocal = sessionmaker(
-    autocommit=False, 
     autoflush=False, 
     bind=engine
     )
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 # Create a dependency
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
@@ -50,7 +48,7 @@ print("Password is not none", database_password is not None)
 # Establish a connection with the database 
 # not necessary anymore, if you want to use postgresql library psycopg2 
 # instead of sqlalchemy
-while True:
+""" while True:
 
     try:
         conn = psycopg2.connect(
@@ -67,4 +65,4 @@ while True:
     except Exception as error:
         print("Connection to database failed")
         print("Error:", error)
-        time.sleep(2)
+        time.sleep(2) """

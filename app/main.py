@@ -35,7 +35,7 @@ app.include_router(votes.router)
 # request Get method url: "/"
 @app.get("/")
 async def root():
-    return {"message": "Hello"}
+    return {"message": "Hello World"}
 
 
 

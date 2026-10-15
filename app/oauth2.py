@@ -18,9 +18,10 @@ ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 
-def create_access_token(data: dict):
+def create_access_token(data: dict) -> str:
     # data variable is the payload of the token
     # make a copy of it
+    # copy it so the caller's dict isn't changed
     to_encode = data.copy()
 
     # Expiration time of 30 minutes
@@ -33,13 +34,13 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 
-def verify_access_token(token: str, credentials_exception):
+def verify_access_token(token: str, credentials_exception) -> schemas.TokenData:
 
     try:
         # First decode the user's token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         # We extract the id from the payload 
-        id: str = payload.get("user_id")
+        id = payload.get("user_id")
 
         # If there's no id, throw an error 
         if id is None:
@@ -54,13 +55,18 @@ def verify_access_token(token: str, credentials_exception):
 # Take the token, extract the user's id, verify that the token is correct
 # 
 def get_current_user(token: str = Depends(oauth2_schema), 
-                     db: Session = Depends(database.get_db)):
+                     db: Session = Depends(database.get_db)) -> models.User:
     # when sth is wrong, credentials is wrong, or sth wrong with JWT token
-    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=f"Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=f"Could not validate credentials", 
+        headers={"WWW-Authenticate": "Bearer"})
 
-    token = verify_access_token(token, credentials_exception)
+    token_data = verify_access_token(token, credentials_exception)
 
-    user = db.query(models.User).filter(models.User.id == token.id).first()
+    # user = db.query(models.User).filter(models.User.id == token_data.id).first()
+    user = db.get(models.User, token_data.id)
 
+    if user is None:
+        raise credentials_exception
     return user

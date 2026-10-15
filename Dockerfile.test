@@ -1,0 +1,21 @@
+# Install uv 
+FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim
+WORKDIR /app
+
+# Install locked dependencies
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --group dev
+
+# Copy application code
+
+COPY app ./app
+COPY tests ./tests
+
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+
+# Make the container's virtual environment available
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Run the test suite 
+CMD ["uv", "run", "--no-sync","pytest", "-s", "tests/"]

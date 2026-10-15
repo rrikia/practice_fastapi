@@ -14,6 +14,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env")
 
+# ignore
 settings = Settings()
+
 # Access variable DATABASE_PASSWORD by 
 # settings.DATABASE_PASSWORD 

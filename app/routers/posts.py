@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, select
 from .. import models, schemas, oauth2
 from ..database import get_db
 from typing import Optional, List
@@ -18,7 +18,7 @@ router = APIRouter(
 # /posts
 @router.get("/", response_model=List[schemas.PostOut])
 def get_posts(db: Session = Depends(get_db), 
-              current_user : int = Depends(oauth2.get_current_user), 
+              current_user : models.User = Depends(oauth2.get_current_user), 
               limit: int = 10, skip: int = 0, search: Optional[str]=""):
     # Code to get all posts using raw SQL
     # cursor.execute("""SELECT * FROM posts""")
@@ -30,9 +30,19 @@ def get_posts(db: Session = Depends(get_db),
 
     # by default in SQLAlchemy join, it's a left inner join
     # but here we want a left outer join 
-    results = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
-          models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(
-                models.Post.title.contains(search)).limit(limit).offset(skip).all()
+    # Old code
+    # results = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
+    #      models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(
+    #            models.Post.title.contains(search)).limit(limit).offset(skip).all()
+
+    results = db.execute(
+          select(models.Post, func.count(models.Vote.post_id).label("votes"))
+          .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
+          .where(models.Post.title.contains(search))
+          .group_by(models.Post.id)
+          .limit(limit)
+          .offset(skip)
+    ).all()
 
     # From fixing bug, no idea 
     results = list(map(lambda x: x._mapping, results))
@@ -44,7 +54,7 @@ def get_posts(db: Session = Depends(get_db),
 # /posts
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
 def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db),
-                current_user : int = Depends(oauth2.get_current_user)):
+                current_user : models.User = Depends(oauth2.get_current_user)):
     # SQL query
     # cursor.execute("""INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING * """
     #               , (post.title, post.content, post.published))
@@ -55,7 +65,7 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db),
 
     # Unpack Pydantic schema dictionary into SQLAlchemy Model
     # print(current_user.id)
-    new_post = models.Post(owner_id=current_user.id, **post.dict()) 
+    new_post = models.Post(owner_id=current_user.id, **post.model_dump()) 
     db.add(new_post)
     # Commit the change to the database
     db.commit()
@@ -69,7 +79,7 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db),
 @router.get("/{id}", response_model=schemas.PostOut)
 # Every path parameter is returned as a string so convert it into int
 def get_post(id: int, db: Session = Depends(get_db),
-             current_user : int = Depends(oauth2.get_current_user)):
+             current_user : models.User = Depends(oauth2.get_current_user)):
     # id must be a str in the SQL query
     # cursor.execute("""SELECT * FROM posts WHERE id = %s """, (str(id)),)
     # post = cursor.fetchone()
@@ -89,7 +99,7 @@ def get_post(id: int, db: Session = Depends(get_db),
 # /posts/{id}
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(id: int, db: Session = Depends(get_db),
-                current_user : int = Depends(oauth2.get_current_user)):
+                current_user : models.User = Depends(oauth2.get_current_user)):
     # empty comma is to avoid any potential issue
     # no idea why
     # cursor.execute("""DELETE FROM posts WHERE id = %s RETURNING * """, (str(id)),)
@@ -97,8 +107,9 @@ def delete_post(id: int, db: Session = Depends(get_db),
     # conn.commit()
 
     # Define the query
-    post_query = db.query(models.Post).filter(models.Post.id == id)
-    post = post_query.first()
+    # post_query = db.query(models.Post).filter(models.Post.id == id)
+    # post = post_query.first()
+    post = db.get(models.Post, id)
 
     # cannot find the post to delete 
     if post == None:
@@ -109,8 +120,10 @@ def delete_post(id: int, db: Session = Depends(get_db),
     if post.owner_id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
                             detail="Not authorized to perform requested action")
-    # Find the original query anf append the delete to it 
-    post_query.delete(synchronize_session=False)
+    
+    # Find the original query and append the delete to it 
+    # post_query.delete(synchronize_session=False)
+    db.delete(post)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -121,14 +134,16 @@ def delete_post(id: int, db: Session = Depends(get_db),
 # /posts/{id}
 @router.put("/{id}", response_model=schemas.Post)
 def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db),
-                current_user : int = Depends(oauth2.get_current_user)):
+                current_user : models.User = Depends(oauth2.get_current_user)):
     # cursor.execute("""UPDATE posts SET title=%s, content=%s, published=%s WHERE id=%s RETURNING *""", 
     #               (post.title, post.content, post.published, (str(id))))
     # updated_post = cursor.fetchone()
     # conn.commit()
     # Query to find the post with the id 
-    post_query = db.query(models.Post).filter(models.Post.id == id)
-    post = post_query.first()
+    
+    # post_query = db.query(models.Post).filter(models.Post.id == id)
+    post = db.get(models.Post, id)
+    # post = post_query.first()
 
     if post == None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
@@ -142,6 +157,10 @@ def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends
                             detail="Not authorized to perform requested action")
     
     # Chain the update method to the same query object
-    post_query.update(updated_post.dict(), synchronize_session=False)
+    # Copy each field from the request onto the post object
+    # setatr to set the attribute of the post object to the value of the updated_post object
+    for key, value in updated_post.model_dump().items():
+        setattr(post, key, value)
+    # post_query.update(updated_post.model_dump(), synchronize_session=False)
     db.commit()
-    return post_query.first()
+    return post

@@ -1,0 +1,35 @@
+name: fastapi-tests
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}_test
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    env_file:
+      - .env
+    environment:
+      DATABASE_HOSTNAME: db
+      DATABASE_NAME: ${DATABASE_NAME}_test
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uv", "run", "--no-sync", "pytest", "-s", "tests/"]
+
+volumes:
+  postgres_test_data:
